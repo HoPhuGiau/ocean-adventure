@@ -1079,6 +1079,17 @@ export default function SailingScene({ walletConnected, walletAddress, onConnect
       ) : (
         <>
           <ControlsHint visible={showControls} />
+          <div className="pointer-events-none absolute top-6 right-6 w-[240px] text-white">
+            <div className={`${HUB_PANEL_CLASS} px-5 py-3 text-white`}>
+              <div className="flex items-center justify-between">
+                <span className={HUB_HEADING_CLASS}>Docked</span>
+                <span className={HUB_BADGE_CLASS}>Island Mode</span>
+              </div>
+              <p className={`${HUB_BODY_CLASS} mt-2`}>
+                Press <span className="font-semibold text-white">B</span> to return to the ocean.
+              </p>
+            </div>
+          </div>
         </>
       )}
 
