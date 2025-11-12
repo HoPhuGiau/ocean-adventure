@@ -334,21 +334,6 @@ function IslandPreview({ island }) {
 }
 
 function SeaScenery({ size, islands }) {
-  const rockPositions = useMemo(() => {
-    const positions = []
-    const radius = size * 0.22
-    const rockCount = 18
-    for (let i = 0; i < rockCount; i += 1) {
-      const angle = (i / rockCount) * Math.PI * 2
-      const distance = radius + Math.random() * (radius * 0.35)
-      const x = Math.cos(angle) * distance
-      const z = Math.sin(angle) * distance
-      const scale = 1.1 + Math.random() * 1.9
-      positions.push({ position: [x, -0.08, z], scale })
-    }
-    return positions
-  }, [size])
-
   return (
     <group>
       <Water
@@ -372,13 +357,6 @@ function SeaScenery({ size, islands }) {
 
       {islands.map((island) => (
         <IslandPreview key={island.id} island={island} />
-      ))}
-
-      {rockPositions.map((rock, index) => (
-        <mesh key={`rock-${index}`} position={rock.position} scale={rock.scale} castShadow receiveShadow>
-          <icosahedronGeometry args={[1, 1]} />
-          <meshStandardMaterial color="#2e3a45" roughness={0.9} metalness={0.1} />
-        </mesh>
       ))}
     </group>
   )
