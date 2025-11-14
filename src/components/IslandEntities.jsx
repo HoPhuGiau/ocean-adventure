@@ -59,9 +59,11 @@ export default function IslandEntities({
   selectedEntity,
   onSelectEntity,
   onClearSelection,
+  labelResetKey,
 }) {
   const [hoveredId, setHoveredId] = useState(null)
   const [pressedId, setPressedId] = useState(null)
+  const [labelledIds, setLabelledIds] = useState([])
   const entityRefs = useRef([])
   const angleRefs = useRef([])
 
@@ -70,7 +72,12 @@ export default function IslandEntities({
   useEffect(() => {
     entityRefs.current = []
     angleRefs.current = entities.map(() => Math.random() * Math.PI * 2)
+    setLabelledIds([])
   }, [entities])
+
+  useEffect(() => {
+    setLabelledIds([])
+  }, [labelResetKey])
 
   useFrame((_, delta) => {
     if (!movementEnabled || movementPaused) return
@@ -104,6 +111,7 @@ export default function IslandEntities({
         const isPressed = pressedId === entity.id
         const showHighlight = isSelected || isHovered || isPressed
         const highlightOpacity = isSelected ? 0.45 : isPressed ? 0.4 : 0.3
+        const showLabel = labelledIds.includes(entity.id)
         const zoneEntries =
           isSelected && selectedEntity?.zoneEntries
             ? selectedEntity.zoneEntries
@@ -123,6 +131,7 @@ export default function IslandEntities({
             onPointerOver={(event) => {
               event.stopPropagation()
               setHoveredId(entity.id)
+              setLabelledIds((prev) => (prev.includes(entity.id) ? prev : [...prev, entity.id]))
             }}
             onPointerOut={(event) => {
               event.stopPropagation()
@@ -157,6 +166,13 @@ export default function IslandEntities({
                 <boxGeometry args={[1, 1, 1]} />
                 <meshBasicMaterial color={entity.color} transparent opacity={highlightOpacity} depthWrite={false} />
               </mesh>
+            )}
+            {showLabel && (
+              <Html position={[0, ENTITY_BOX_SIZE[1] * 0.6 + 1.6, 0]} center distanceFactor={20}>
+                <div className="pointer-events-none rounded-[14px] border border-lime-200/70 bg-emerald-900/90 px-4 py-1.5 text-sm font-semibold uppercase tracking-[0.3em] text-emerald-50 shadow-[0_0_35px_rgba(34,197,94,0.6)]">
+                  {entity.name}
+                </div>
+              </Html>
             )}
             {isSelected && (
               <Html

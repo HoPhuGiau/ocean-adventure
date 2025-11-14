@@ -886,6 +886,7 @@ export default function SailingScene({ walletConnected, walletAddress, onConnect
   const [boostActive, setBoostActive] = useState(false)
   const [isCameraDragging, setIsCameraDragging] = useState(false)
   const [selectedEntity, setSelectedEntity] = useState(null)
+  const [islandLabelResetKey, setIslandLabelResetKey] = useState(0)
   const [activeSeaMarker, setActiveSeaMarker] = useState(null)
   const boatSavedStateRef = useRef({
     position: new THREE.Vector3(),
@@ -965,6 +966,7 @@ export default function SailingScene({ walletConnected, walletAddress, onConnect
   useEffect(() => {
     if (mode !== 'island') {
       setSelectedEntity(null)
+      setIslandLabelResetKey((prev) => prev + 1)
     }
   }, [mode])
 
@@ -999,6 +1001,7 @@ export default function SailingScene({ walletConnected, walletAddress, onConnect
       boatRef.current.position.copy(boatSavedStateRef.current.position)
       boatRef.current.rotation.y = boatSavedStateRef.current.rotationY
     }
+    setIslandLabelResetKey((prev) => prev + 1)
     setMode('sailing')
     setActiveIslandId(null)
     setBoatEnabled(true)
@@ -1210,6 +1213,7 @@ export default function SailingScene({ walletConnected, walletAddress, onConnect
               if (activeSeaMarker) {
                 handleCloseSeaMarker()
               } else if (mode === 'island') {
+                setIslandLabelResetKey((prev) => prev + 1)
                 handleClearEntitySelection()
               }
             }}
@@ -1274,6 +1278,7 @@ export default function SailingScene({ walletConnected, walletAddress, onConnect
                   onClearSelection={handleClearEntitySelection}
                   zoneData={islandZones}
                   selectedEntity={selectedEntity}
+                  labelResetKey={islandLabelResetKey}
                 />
               )}
             </Suspense>
