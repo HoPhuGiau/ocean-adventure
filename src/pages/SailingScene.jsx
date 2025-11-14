@@ -220,6 +220,10 @@ const SEA_MARKER_PRESETS = [
     interactionRadius: 34,
     minSpacing: 90,
     description: 'A roaming guardian that signals nearby Draken encounters and hidden sea quests.',
+    modelPath: '/models/draken2.glb',
+    modelScale: [18, 18, 18],
+    modelRotation: [0, 0, 0],
+    modelOffset: [0, -5, 0],
     entries: [
       { id: 'draken-encounter', name: 'Draken Encounter', categories: ['Encounter', 'Quest'], url: '#' },
       { id: 'deep-sea-bounty', name: 'Deep Sea Bounty', categories: ['Treasure', 'Exploration'], url: '#' },
@@ -234,6 +238,10 @@ const SEA_MARKER_PRESETS = [
     interactionRadius: 30,
     minSpacing: 80,
     description: 'Illuminates oceanic routes and reveals time-limited lanternfish rewards.',
+    modelPath: '/models/lantern2.glb',
+    modelScale: [8, 8, 8],
+    modelRotation: [0, 0, 0],
+    modelOffset: [0, -8, 0],
     entries: [
       { id: 'lanternfish-scout', name: 'Lanternfish Scout', categories: ['Creature'], url: '#' },
       { id: 'glow-crates', name: 'Glow Crates', categories: ['Loot'], url: '#' },
@@ -342,19 +350,23 @@ function BoatCameraRig({ boatRef, cameraDragRef }) {
 
     tempDirection.set(0, 0, -1).applyQuaternion(boat.quaternion).applyAxisAngle(Y_AXIS, yawOffset).normalize()
     tempPosition.copy(boat.position).addScaledVector(tempDirection, -followOffset.z)
-    tempPosition.y = boat.position.y + followOffset.y + pitchOffset * -1.4
+    tempPosition.y = Math.max(boat.position.y + followOffset.y + pitchOffset * -1.4, 0.5)
     tempPosition.x += followOffset.x
 
     smoothedPosition.current.lerp(tempPosition, 1 - Math.pow(0.0015, delta * 60))
-    camera.position.copy(smoothedPosition.current)
+    const finalPosition = smoothedPosition.current.clone()
+    finalPosition.y = Math.max(finalPosition.y, 0.5)
+    camera.position.copy(finalPosition)
 
     tempLookAtPosition.copy(boat.position).add(lookAtOffset)
     tempSide.set(1, 0, 0).applyQuaternion(boat.quaternion).normalize()
     tempLookAtPosition.addScaledVector(tempSide, Math.sin(yawOffset) * 2.2)
-    tempLookAtPosition.y += pitchOffset * -5.5
+    tempLookAtPosition.y = Math.max(tempLookAtPosition.y + pitchOffset * -5.5, 0.5)
 
     smoothedLookAt.current.lerp(tempLookAtPosition, 1 - Math.pow(0.0008, delta * 60))
-    camera.lookAt(smoothedLookAt.current)
+    const finalLookAt = smoothedLookAt.current.clone()
+    finalLookAt.y = Math.max(finalLookAt.y, 0.5)
+    camera.lookAt(finalLookAt)
   })
 
   return null
@@ -454,7 +466,7 @@ function SeaScenery({ size, islands }) {
   return (
     <group>
       <Water
-        size={size}
+        size={size * 1.4}
         resolution={320}
         position={[0, 0, 0]}
         materialConfig={{
@@ -468,7 +480,7 @@ function SeaScenery({ size, islands }) {
       />
 
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.75, 0]} receiveShadow>
-        <planeGeometry args={[size * 1.2, size * 1.2]} />
+        <planeGeometry args={[size * 1.6, size * 1.6]} />
         <meshStandardMaterial color="#062a4f" roughness={0.95} metalness={0.05} />
       </mesh>
 
@@ -874,6 +886,98 @@ function IslandZonesPanel() {
   return null
 }
 
+function TimeOfDayManager({ onTimeUpdate }) {
+  const startTimeRef = useRef(Date.now())
+  const webTimeScale = 60 // 1 minute real = 1 hour web (24 minutes real = 24 hours web)
+
+  useFrame(() => {
+    const realTimeElapsed = (Date.now() - startTimeRef.current) / 1000 // seconds
+    const webTimeElapsed = realTimeElapsed * webTimeScale // 1 second real = 60 seconds web (1 minute/hour)
+    const webHours = (webTimeElapsed / 3600) % 24 // 0-24 hours
+    const dayProgress = webHours / 24 // 0-1 (0 = midnight, 0.5 = noon, 1 = midnight)
+
+    onTimeUpdate(dayProgress, webHours)
+  })
+
+  return null
+}
+
+function DynamicSun({ dayProgress }) {
+  const sunDistance = 300
+  const sunRadius = 18
+
+  const sunAngle = dayProgress * Math.PI * 2 - Math.PI / 2
+  const sunX = Math.cos(sunAngle) * sunDistance
+  const sunY = Math.sin(sunAngle) * sunDistance
+  const sunZ = 0
+
+  const isDay = sunY > -50
+  if (!isDay) return null
+
+  const hours = (dayProgress * 24) % 24
+  let sunColor = '#fff8e1'
+  let emissiveIntensity = 2
+
+  if (hours >= 5 && hours < 7) {
+    sunColor = '#ff8c42'
+    emissiveIntensity = 1.8
+  } else if (hours >= 7 && hours < 9) {
+    sunColor = '#ffb347'
+    emissiveIntensity = 1.9
+  } else if (hours >= 9 && hours < 17) {
+    sunColor = '#fff8e1'
+    emissiveIntensity = 2.2
+  } else if (hours >= 17 && hours < 19) {
+    sunColor = '#ff8c42'
+    emissiveIntensity = 1.8
+  } else if (hours >= 19 && hours < 20) {
+    sunColor = '#ff6b6b'
+    emissiveIntensity = 1.5
+  }
+
+  return (
+    <mesh position={[sunX, sunY, sunZ]}>
+      <sphereGeometry args={[sunRadius, 32, 32]} />
+      <meshBasicMaterial color={sunColor} emissive={sunColor} emissiveIntensity={emissiveIntensity} />
+    </mesh>
+  )
+}
+
+function DynamicMoon({ dayProgress }) {
+  const moonDistance = 300
+  const moonRadius = 12
+
+  const moonAngle = dayProgress * Math.PI * 2 - Math.PI / 2 + Math.PI
+  const moonX = Math.cos(moonAngle) * moonDistance
+  const moonY = Math.sin(moonAngle) * moonDistance
+  const moonZ = 0
+
+  const isNight = moonY > -50
+  if (!isNight) return null
+
+  const hours = (dayProgress * 24) % 24
+  let moonColor = '#e8e8ff'
+  let emissiveIntensity = 1.2
+
+  if (hours >= 20 && hours < 22) {
+    moonColor = '#ffd4a3'
+    emissiveIntensity = 1.0
+  } else if (hours >= 22 || hours < 4) {
+    moonColor = '#e8e8ff'
+    emissiveIntensity = 1.2
+  } else if (hours >= 4 && hours < 6) {
+    moonColor = '#ffd4a3'
+    emissiveIntensity = 1.0
+  }
+
+  return (
+    <mesh position={[moonX, moonY, moonZ]}>
+      <sphereGeometry args={[moonRadius, 32, 32]} />
+      <meshBasicMaterial color={moonColor} emissive={moonColor} emissiveIntensity={emissiveIntensity} />
+    </mesh>
+  )
+}
+
 export default function SailingScene({ walletConnected, walletAddress, onConnect, onDisconnect }) {
   const boatRef = useRef(null)
   const cameraDragRef = useRef({
@@ -887,7 +991,7 @@ export default function SailingScene({ walletConnected, walletAddress, onConnect
     currentPitch: 0,
   })
   const [boatState, setBoatState] = useState({ x: 0, z: 0, heading: 0 })
-  const oceanSize = 520
+  const oceanSize = 720
   const seaMarkers = useMemo(() => generateSeaMarkers(oceanSize, DISTANT_ISLANDS), [oceanSize])
   const [showControls, setShowControls] = useState(false)
   const [mode, setMode] = useState('sailing')
@@ -897,6 +1001,8 @@ export default function SailingScene({ walletConnected, walletAddress, onConnect
   const [boatEnabled, setBoatEnabled] = useState(true)
   const [boostActive, setBoostActive] = useState(false)
   const [isCameraDragging, setIsCameraDragging] = useState(false)
+  const [dayProgress, setDayProgress] = useState(0.25) // Start at 6 AM (0.25)
+  const [webTime, setWebTime] = useState(6) // Current web time in hours
   const [selectedEntity, setSelectedEntity] = useState(null)
   const [islandLabelResetKey, setIslandLabelResetKey] = useState(0)
   const [activeSeaMarker, setActiveSeaMarker] = useState(null)
@@ -1212,9 +1318,12 @@ export default function SailingScene({ walletConnected, walletAddress, onConnect
         <KeyboardControls map={keyboardMap}>
           <Canvas
             shadows
-            camera={{ position: [0, 4.5, 12], fov: 55, near: 0.1, far: 500 }}
-            onCreated={({ scene }) => {
-              scene.fog = new THREE.FogExp2('#093a70', 0.0075)
+            camera={{ position: [0, 4.5, 12], fov: 55, near: 0.05, far: 2000 }}
+            onCreated={({ scene, camera, gl }) => {
+              scene.fog = new THREE.FogExp2('#093a70', 0.003)
+              camera.far = 2000
+              camera.updateProjectionMatrix()
+              gl.setClearColor('#093a70', 1.0)
             }}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
@@ -1230,32 +1339,175 @@ export default function SailingScene({ walletConnected, walletAddress, onConnect
               }
             }}
           >
-            <color attach="background" args={['#0a2c59']} />
-            <ambientLight intensity={0.32} color="#a8c8ff" />
-            <directionalLight
-              castShadow
-              position={[15, 25, 12]}
-              intensity={1.2}
-              shadow-mapSize-width={2048}
-              shadow-mapSize-height={2048}
-              shadow-camera-near={1}
-              shadow-camera-far={160}
-              shadow-camera-left={-60}
-              shadow-camera-right={60}
-              shadow-camera-top={60}
-              shadow-camera-bottom={-60}
+            <TimeOfDayManager
+              onTimeUpdate={(progress, hours) => {
+                setDayProgress(progress)
+                setWebTime(hours)
+              }}
             />
-            <directionalLight position={[-30, 18, -24]} intensity={0.35} color="#90caf9" />
 
-            <Sky
-              distance={450000}
-              sunPosition={[0.25, 1.35, -0.4]}
-              mieCoefficient={0.0025}
-              mieDirectionalG={0.92}
-              rayleigh={2.4}
-              turbidity={3.2}
-              inclination={0.52}
-            />
+            {(() => {
+              const hours = webTime % 24
+              const sunAngle = dayProgress * Math.PI * 2 - Math.PI / 2
+              const sunX = Math.cos(sunAngle) * 300
+              const sunY = Math.sin(sunAngle) * 300
+              const sunZ = 0
+
+              const moonAngle = dayProgress * Math.PI * 2 - Math.PI / 2 + Math.PI
+              const moonX = Math.cos(moonAngle) * 300
+              const moonY = Math.sin(moonAngle) * 300
+
+              const isDay = sunY > -50
+              const isNight = moonY > -50
+              const sunHeight = Math.max(sunY, -200)
+              const moonHeight = Math.max(moonY, -200)
+
+              let lightColor = '#fff8e1'
+              let lightIntensity = 0.3
+              let ambientIntensity = 0.25
+              let ambientColor = '#1a1a3e'
+              let backgroundColor = '#093a70'
+              let skyInclination = 0.8
+              let skyTurbidity = 10
+              let skyRayleigh = 0.5
+              let lightPosition = [0, -200, 0]
+              let useSun = false
+
+              if (isDay) {
+                useSun = true
+                lightPosition = [sunX * 0.05, sunHeight * 0.05, sunZ * 0.05]
+                const sunPosition = [sunX * 0.001, sunHeight * 0.001 + 1, sunZ * 0.001]
+
+                if (hours >= 5 && hours < 7) {
+                  lightColor = '#ff4d00'
+                  lightIntensity = Math.max(0.8, Math.min(1.6, (sunHeight + 50) / 150))
+                  ambientIntensity = Math.max(0.42, Math.min(0.55, (sunHeight + 50) / 200))
+                  ambientColor = '#ff7040'
+                  backgroundColor = '#ff3d2e'
+                  skyInclination = 0.75
+                  skyTurbidity = 18
+                  skyRayleigh = 0.3
+                } else if (hours >= 7 && hours < 9) {
+                  lightColor = '#ff7d00'
+                  lightIntensity = Math.max(0.9, Math.min(1.7, (sunHeight + 50) / 150))
+                  ambientIntensity = Math.max(0.45, Math.min(0.58, (sunHeight + 50) / 200))
+                  ambientColor = '#ff9950'
+                  backgroundColor = '#ff8d2e'
+                  skyInclination = 0.65
+                  skyTurbidity = 11
+                  skyRayleigh = 0.8
+                } else if (hours >= 9 && hours < 17) {
+                  lightColor = '#fffef0'
+                  lightIntensity = Math.max(1.1, Math.min(2.0, (sunHeight + 50) / 150))
+                  ambientIntensity = Math.max(0.48, Math.min(0.62, (sunHeight + 50) / 200))
+                  ambientColor = '#a8e6ff'
+                  backgroundColor = '#2d7fd9'
+                  skyInclination = 0.52
+                  skyTurbidity = 1.2
+                  skyRayleigh = 8.5
+                } else if (hours >= 17 && hours < 19) {
+                  lightColor = '#ff4d00'
+                  lightIntensity = Math.max(0.8, Math.min(1.6, (sunHeight + 50) / 150))
+                  ambientIntensity = Math.max(0.42, Math.min(0.55, (sunHeight + 50) / 200))
+                  ambientColor = '#ff7040'
+                  backgroundColor = '#ff3d2e'
+                  skyInclination = 0.65
+                  skyTurbidity = 20
+                  skyRayleigh = 0.3
+                } else if (hours >= 19 && hours < 20) {
+                  lightColor = '#ff2d2d'
+                  lightIntensity = Math.max(0.65, Math.min(1.4, (sunHeight + 50) / 150))
+                  ambientIntensity = Math.max(0.35, Math.min(0.48, (sunHeight + 50) / 200))
+                  ambientColor = '#ff4d4d'
+                  backgroundColor = '#cc1d1d'
+                  skyInclination = 0.75
+                  skyTurbidity = 25
+                  skyRayleigh = 0.1
+                } else {
+                  skyInclination = 0.52
+                  skyTurbidity = 3.2
+                  skyRayleigh = 2.4
+                }
+                if (hours >= 9 && hours < 17) backgroundColor = '#0d3d7a'
+              } else if (isNight) {
+                useSun = false
+                lightPosition = [moonX * 0.05, moonHeight * 0.05, 0]
+                const moonPosition = [moonX * 0.001, moonHeight * 0.001 + 1, 0]
+
+                if (hours >= 20 && hours < 22) {
+                  lightColor = '#ffc866'
+                  lightIntensity = Math.max(0.5, Math.min(0.75, (moonHeight + 50) / 150))
+                  ambientIntensity = Math.max(0.32, 0.40)
+                  ambientColor = '#5a5a8e'
+                  backgroundColor = '#2a2a5a'
+                  skyInclination = 0.85
+                  skyTurbidity = 25
+                  skyRayleigh = 0.1
+                } else if (hours >= 22 || hours < 4) {
+                  lightColor = '#e4e4ff'
+                  lightIntensity = Math.max(0.55, Math.min(0.8, (moonHeight + 50) / 150))
+                  ambientIntensity = Math.max(0.38, 0.45)
+                  ambientColor = '#2a2a5e'
+                  backgroundColor = '#000020'
+                  skyInclination = 0.9
+                  skyTurbidity = 30
+                  skyRayleigh = 0.02
+                } else if (hours >= 4 && hours < 6) {
+                  lightColor = '#ffc866'
+                  lightIntensity = Math.max(0.5, Math.min(0.75, (moonHeight + 50) / 150))
+                  ambientIntensity = Math.max(0.32, 0.40)
+                  ambientColor = '#5a5a8e'
+                  backgroundColor = '#2a2a5a'
+                  skyInclination = 0.85
+                  skyTurbidity = 25
+                  skyRayleigh = 0.1
+                } else {
+                  skyInclination = 0.8
+                  skyTurbidity = 10
+                  skyRayleigh = 0.5
+                }
+                if (hours >= 22 || hours < 4) backgroundColor = '#0a0a1f'
+              }
+
+              const sunPosition = [sunX * 0.001, sunHeight * 0.001 + 1, sunZ * 0.001]
+              const moonPosition = [moonX * 0.001, moonHeight * 0.001 + 1, 0]
+
+              const safeBackgroundColor = backgroundColor || '#093a70'
+              return (
+                <>
+                  <color attach="background" args={[safeBackgroundColor]} />
+                  <ambientLight intensity={ambientIntensity} color={ambientColor} />
+                  <directionalLight
+                    castShadow
+                    position={lightPosition}
+                    intensity={lightIntensity}
+                    color={lightColor}
+                    shadow-mapSize-width={2048}
+                    shadow-mapSize-height={2048}
+                    shadow-camera-near={1}
+                    shadow-camera-far={160}
+                    shadow-camera-left={-60}
+                    shadow-camera-right={60}
+                    shadow-camera-top={60}
+                    shadow-camera-bottom={-60}
+                  />
+                  {isDay && <directionalLight position={[-30, 18, -24]} intensity={0.35 * lightIntensity} color="#90caf9" />}
+
+                  {isDay && <DynamicSun dayProgress={dayProgress} />}
+                  {isNight && <DynamicMoon dayProgress={dayProgress} />}
+
+                  <Sky
+                    distance={450000}
+                    sunPosition={useSun ? sunPosition : moonPosition}
+                    mieCoefficient={0.006}
+                    mieDirectionalG={0.82}
+                    rayleigh={skyRayleigh}
+                    turbidity={skyTurbidity}
+                    inclination={skyInclination}
+                  />
+                </>
+              )
+            })()}
 
             <Environment preset="dawn" background={false} />
 

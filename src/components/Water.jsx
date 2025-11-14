@@ -9,8 +9,8 @@ const WaterMaterial = shaderMaterial(
     uWaveHeight: 0.76,
     uWaveScale: 0.19,
     uWaveSpeed: 0.5,
-    uColorDeep: new THREE.Color('#032e66'),
-    uColorShallow: new THREE.Color('#1a9bff'),
+    uColorDeep: new THREE.Color('#2a9fd4'),
+    uColorShallow: new THREE.Color('#87ceeb'),
     uSunDirection: new THREE.Vector3(0.45, 1.3, 0.18).normalize(),
     uFoamThreshold: 0.34,
   },
@@ -94,11 +94,13 @@ const WaterMaterial = shaderMaterial(
       float colorMix = clamp((vElevation * 1.8) + 0.45, 0.0, 1.0);
       vec3 baseColor = mix(uColorDeep, uColorShallow, colorMix);
 
-      vec3 lighting = baseColor * (0.4 + 0.75 * diffuse) + vec3(0.8, 0.95, 1.0) * specular * 0.85;
-      vec3 foamColor = mix(vec3(0.96, 1.0, 1.0), vec3(0.78, 0.92, 1.0), 0.35);
+      float smoothDiffuse = mix(0.95, 1.12, smoothstep(-0.3, 0.3, diffuse * 0.4));
+      vec3 lighting = baseColor * smoothDiffuse * 1.15 + vec3(0.95, 0.99, 1.0) * specular * 0.3;
+      vec3 foamColor = mix(vec3(0.98, 1.0, 1.0), vec3(0.85, 0.95, 1.0), 0.3);
 
-      vec3 finalColor = mix(lighting, foamColor, foam * 0.55 + fresnel * 0.22);
-      finalColor += fresnel * 0.7;
+      vec3 finalColor = mix(lighting, foamColor, foam * 0.4 + fresnel * 0.12);
+      finalColor += fresnel * 0.25;
+      finalColor = max(finalColor, baseColor * 0.85);
 
       gl_FragColor = vec4(finalColor, 0.92);
     }

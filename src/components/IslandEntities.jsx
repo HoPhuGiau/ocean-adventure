@@ -1,6 +1,6 @@
-import { useMemo, useRef, useState, useEffect } from 'react'
+import { Suspense, useMemo, useRef, useState, useEffect } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { Html } from '@react-three/drei'
+import { Html, useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
 import { islandEntitiesConfig } from '../utils/islandEntities'
 
@@ -8,6 +8,15 @@ const tempVec3 = new THREE.Vector3()
 
 const ENTITY_BOX_SIZE = [1.6, 1.6, 1.6]
 const ENTITY_OUTLINE_SCALE = 1.18
+
+function EntityModel({ modelPath, scale = [1, 1, 1], rotation = [0, 0, 0], offset = [0, 0, 0] }) {
+  const gltf = useGLTF(modelPath)
+  return (
+    <group position={offset} scale={scale} rotation={rotation}>
+      <primitive object={gltf.scene} dispose={null} />
+    </group>
+  )
+}
 
 function deriveEntities(island) {
   if (!island?.id) return []
@@ -151,16 +160,27 @@ export default function IslandEntities({
               onSelectEntity(entity, zoneEntries)
             }}
           >
-            <mesh scale={ENTITY_BOX_SIZE}>
-              <boxGeometry args={[1, 1, 1]} />
-              <meshStandardMaterial
-                color={entity.color}
-                metalness={0.35}
-                roughness={0.4}
-                emissive={entity.color}
-                emissiveIntensity={0.18}
-              />
-            </mesh>
+            {entity.modelPath ? (
+              <Suspense fallback={null}>
+                <EntityModel
+                  modelPath={entity.modelPath}
+                  scale={entity.modelScale || [1, 1, 1]}
+                  rotation={entity.modelRotation || [0, 0, 0]}
+                  offset={entity.modelOffset || [0, 0, 0]}
+                />
+              </Suspense>
+            ) : (
+              <mesh scale={ENTITY_BOX_SIZE}>
+                <boxGeometry args={[1, 1, 1]} />
+                <meshStandardMaterial
+                  color={entity.color}
+                  metalness={0.35}
+                  roughness={0.4}
+                  emissive={entity.color}
+                  emissiveIntensity={0.18}
+                />
+              </mesh>
+            )}
             {showHighlight && (
               <mesh scale={ENTITY_BOX_SIZE.map((val) => val * ENTITY_OUTLINE_SCALE)}>
                 <boxGeometry args={[1, 1, 1]} />
