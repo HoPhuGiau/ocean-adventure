@@ -54,8 +54,15 @@ const HUB_ANCHOR_CLASS =
 const CAMERA_DRAG_CONFIG = {
   yawSensitivity: 0.0022,
   pitchSensitivity: 0.0016,
-  yawLimit: 0.65,
-  pitchLimit: 0.35,
+  yawLimit: 2.35,
+  pitchLimit: 0.48,
+}
+
+const BOAT_MODEL_CONFIG = {
+  path: '/models/Ship3D.glb',
+  scale: [6, 6, 6],
+  rotation: [0, -Math.PI / 2, 0],
+  offset: [0, 1.15, 0],
 }
 
 const mashSeed = (seedString) => {
@@ -241,6 +248,10 @@ const SEA_MARKER_PRESETS = [
     interactionRadius: 36,
     minSpacing: 90,
     description: 'A floating outpost marking secret treasure dives and expedition hubs.',
+    modelPath: '/models/treasure_island.glb',
+    modelScale: [20, 20, 20],
+    modelRotation: [0, 0, 0],
+    modelOffset: [0, 0, 0],
     entries: [
       { id: 'vault-cache', name: 'Vault Cache', categories: ['Treasure'], url: '#' },
       { id: 'expedition-brief', name: 'Expedition Brief', categories: ['Mission'], url: '#' },
@@ -264,7 +275,8 @@ function generateSeaMarkers(oceanSize, islands) {
       attempts += 1
       const x = (Math.random() * 2 - 1) * spawnRadius
       const z = (Math.random() * 2 - 1) * spawnRadius
-      const position = [x, 0.85, z]
+      const baseY = preset.modelPath ? 9 : 0.85
+      const position = [x, baseY, z]
 
       let valid = true
 
@@ -776,7 +788,7 @@ function SeaMarkerOverlay({ marker, onClose }) {
               onClick={onClose}
               className="rounded-full border border-emerald-100/50 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.28em] text-emerald-100 hover:bg-emerald-100/20"
             >
-              Close
+              CLOSE (B)
             </button>
           </div>
 
@@ -876,7 +888,7 @@ export default function SailingScene({ walletConnected, walletAddress, onConnect
   })
   const [boatState, setBoatState] = useState({ x: 0, z: 0, heading: 0 })
   const oceanSize = 520
-  const [seaMarkers] = useState(() => generateSeaMarkers(oceanSize, DISTANT_ISLANDS))
+  const seaMarkers = useMemo(() => generateSeaMarkers(oceanSize, DISTANT_ISLANDS), [oceanSize])
   const [showControls, setShowControls] = useState(false)
   const [mode, setMode] = useState('sailing')
   const [landingCandidate, setLandingCandidate] = useState(null)
@@ -1162,7 +1174,7 @@ export default function SailingScene({ walletConnected, walletAddress, onConnect
       if (event.repeat) return
 
       if (mode === 'sailing') {
-        if (activeSeaMarker && (event.code === 'Escape' || event.code === 'KeyE')) {
+        if (activeSeaMarker && (event.code === 'Escape' || event.code === 'KeyE' || event.code === 'KeyB')) {
           handleCloseSeaMarker()
           return
         }
@@ -1268,6 +1280,10 @@ export default function SailingScene({ walletConnected, walletAddress, onConnect
                 collisionSlideFactor={1.9}
                 slideDamping={0.78}
                 turnSpeed={THREE.MathUtils.degToRad(boostActive ? 90 : 75)}
+                modelPath={BOAT_MODEL_CONFIG.path}
+                modelScale={BOAT_MODEL_CONFIG.scale}
+                modelRotation={BOAT_MODEL_CONFIG.rotation}
+                modelOffset={BOAT_MODEL_CONFIG.offset}
               />
               {mode === 'island' && activeIsland && (
                 <IslandEntities

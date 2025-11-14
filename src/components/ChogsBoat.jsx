@@ -1,7 +1,16 @@
 import { forwardRef, useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { Trail } from '@react-three/drei'
+import { Trail, useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
+
+function BoatModelVisual({ path, scale = [1, 1, 1], rotation = [0, 0, 0], offset = [0, 0, 0] }) {
+  const gltf = useGLTF(path)
+  return (
+    <group position={offset} scale={scale} rotation={rotation}>
+      <primitive object={gltf.scene} dispose={null} />
+    </group>
+  )
+}
 
 const KEY_BINDINGS = {
   KeyW: 'forward',
@@ -80,6 +89,10 @@ const ChogsBoat = forwardRef(function ChogsBoat(
     collisionRadius = 2.8,
     collisionSlideFactor = 1.8,
     slideDamping = 0.78,
+    modelPath = null,
+    modelScale = [1, 1, 1],
+    modelRotation = [0, 0, 0],
+    modelOffset = [0, 0, 0],
   },
   ref
 ) {
@@ -87,6 +100,7 @@ const ChogsBoat = forwardRef(function ChogsBoat(
   const velocityRef = useRef(0)
   const controlsRef = useBoatControls()
   const slideRef = useRef(new THREE.Vector2(0, 0))
+  const currentTurnRateRef = useRef(0)
 
   useEffect(() => {
     assignRef(ref, boatRef.current)
@@ -176,8 +190,32 @@ const ChogsBoat = forwardRef(function ChogsBoat(
 
     const speedFactor = THREE.MathUtils.clamp(Math.abs(nextVelocity) / maxSpeed, 0, 1)
     const turning = (left ? 1 : 0) - (right ? 1 : 0)
+    const currentTurnRate = currentTurnRateRef.current
+    
+    let targetTurnRate = 0
     if (turning !== 0 && Math.abs(nextVelocity) > 0.01) {
-      boatRef.current.rotation.y += turning * turnSpeed * delta * (0.35 + speedFactor * 0.65)
+      targetTurnRate = turning * turnSpeed * (0.35 + speedFactor * 0.65)
+    }
+    
+    const turnAcceleration = turnSpeed * 2.4
+    const turnDamping = 5.2
+    const turnDelta = targetTurnRate - currentTurnRate
+    
+    let nextTurnRate = currentTurnRate
+    if (Math.abs(turnDelta) > 0.001) {
+      if (targetTurnRate === 0) {
+        nextTurnRate = THREE.MathUtils.damp(currentTurnRate, 0, turnDamping, delta)
+      } else {
+        const accelDirection = Math.sign(turnDelta)
+        const accelAmount = Math.min(Math.abs(turnDelta), turnAcceleration * delta)
+        nextTurnRate = currentTurnRate + accelDirection * accelAmount
+      }
+    }
+    
+    currentTurnRateRef.current = nextTurnRate
+    
+    if (Math.abs(nextTurnRate) > 0.001) {
+      boatRef.current.rotation.y += nextTurnRate * delta
     }
 
     const slideVector = slideRef.current
@@ -249,59 +287,65 @@ const ChogsBoat = forwardRef(function ChogsBoat(
 
   return (
     <group ref={boatRef} position={position} rotation={[0, Math.PI, 0]} visible={visible}>
-      <mesh geometry={hullGeometry} castShadow receiveShadow>
-        <meshStandardMaterial color={bodyColor} metalness={0.22} roughness={0.68} />
-      </mesh>
+      {modelPath ? (
+        <BoatModelVisual path={modelPath} scale={modelScale} rotation={modelRotation} offset={modelOffset} />
+      ) : (
+        <>
+          <mesh geometry={hullGeometry} castShadow receiveShadow>
+            <meshStandardMaterial color={bodyColor} metalness={0.22} roughness={0.68} />
+          </mesh>
 
-      <mesh geometry={deckGeometry} castShadow receiveShadow>
-        <meshStandardMaterial color={trimColor} metalness={0.3} roughness={0.4} />
-      </mesh>
+          <mesh geometry={deckGeometry} castShadow receiveShadow>
+            <meshStandardMaterial color={trimColor} metalness={0.3} roughness={0.4} />
+          </mesh>
 
-      <mesh geometry={canopyGeometry} castShadow receiveShadow>
-        <meshStandardMaterial color="#0f172a" roughness={0.6} metalness={0.15} side={THREE.DoubleSide} />
-      </mesh>
+          <mesh geometry={canopyGeometry} castShadow receiveShadow>
+            <meshStandardMaterial color="#0f172a" roughness={0.6} metalness={0.15} side={THREE.DoubleSide} />
+          </mesh>
 
-      <mesh position={[0, 1.35, 0.15]} castShadow>
-        <cylinderGeometry args={[0.08, 0.08, 3, 8]} />
-        <meshStandardMaterial color="#facc15" roughness={0.38} metalness={0.5} />
-      </mesh>
+          <mesh position={[0, 1.35, 0.15]} castShadow>
+            <cylinderGeometry args={[0.08, 0.08, 3, 8]} />
+            <meshStandardMaterial color="#facc15" roughness={0.38} metalness={0.5} />
+          </mesh>
 
-      <mesh position={[0, 0.18, 0.9]} rotation={[Math.PI / 2, 0, 0]} castShadow>
-        <cylinderGeometry args={[0.25, 0.08, 1.2, 6]} />
-        <meshStandardMaterial color="#1f2937" roughness={0.55} metalness={0.25} />
-      </mesh>
+          <mesh position={[0, 0.18, 0.9]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+            <cylinderGeometry args={[0.25, 0.08, 1.2, 6]} />
+            <meshStandardMaterial color="#1f2937" roughness={0.55} metalness={0.25} />
+          </mesh>
 
-      <mesh geometry={sailGeometry} position={[0.02, 1.2, 0.4]} castShadow>
-        <meshStandardMaterial
-          color="#e0f2fe"
-          roughness={0.28}
-          metalness={0.05}
-          side={THREE.DoubleSide}
-          emissive="#bae6fd"
-          emissiveIntensity={0.22}
-        />
-      </mesh>
+          <mesh geometry={sailGeometry} position={[0.02, 1.2, 0.4]} castShadow>
+            <meshStandardMaterial
+              color="#e0f2fe"
+              roughness={0.28}
+              metalness={0.05}
+              side={THREE.DoubleSide}
+              emissive="#bae6fd"
+              emissiveIntensity={0.22}
+            />
+          </mesh>
 
-      <mesh geometry={sailGeometry} position={[0.02, 1.2, 0.4]} rotation={[0, Math.PI, 0]} castShadow>
-        <meshStandardMaterial
-          color="#e0f2fe"
-          roughness={0.28}
-          metalness={0.05}
-          side={THREE.DoubleSide}
-          emissive="#bae6fd"
-          emissiveIntensity={0.2}
-        />
-      </mesh>
+          <mesh geometry={sailGeometry} position={[0.02, 1.2, 0.4]} rotation={[0, Math.PI, 0]} castShadow>
+            <meshStandardMaterial
+              color="#e0f2fe"
+              roughness={0.28}
+              metalness={0.05}
+              side={THREE.DoubleSide}
+              emissive="#bae6fd"
+              emissiveIntensity={0.2}
+            />
+          </mesh>
 
-      <mesh position={[0, 2.5, 0.38]} rotation={[0, Math.PI / 10, 0]} castShadow>
-        <planeGeometry args={[0.7, 0.4]} />
-        <meshStandardMaterial
-          color="#38bdf8"
-          emissive="#0ea5e9"
-          emissiveIntensity={0.55}
-          side={THREE.DoubleSide}
-        />
-      </mesh>
+          <mesh position={[0, 2.5, 0.38]} rotation={[0, Math.PI / 10, 0]} castShadow>
+            <planeGeometry args={[0.7, 0.4]} />
+            <meshStandardMaterial
+              color="#38bdf8"
+              emissive="#0ea5e9"
+              emissiveIntensity={0.55}
+              side={THREE.DoubleSide}
+            />
+          </mesh>
+        </>
+      )}
 
       <Trail width={0.9} length={6} decay={0.7} color="#8be9ff" attenuation={(t) => Math.pow(1 - t, 1.8)}>
         <mesh position={[0, 0.15, -1.2]}>
