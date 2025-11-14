@@ -6,6 +6,7 @@ import ChogsBoat from '../components/ChogsBoat'
 import Water from '../components/Water'
 import WalletConnect from '../components/WalletConnect'
 import IslandEntities from '../components/IslandEntities'
+import SeaMarkers from '../components/SeaMarkers'
 import { useQuestStore } from '../store/questStore'
 import { dAppsData } from '../utils/dappsData'
 
@@ -202,6 +203,110 @@ const DISTANT_ISLANDS = [
   },
 ]
 
+const SEA_MARKER_PRESETS = [
+  {
+    id: 'sea-draken',
+    label: 'Draken Sentinel',
+    color: '#38bdf8',
+    scale: 2.4,
+    collisionRadius: 12,
+    interactionRadius: 34,
+    minSpacing: 90,
+    description: 'A roaming guardian that signals nearby Draken encounters and hidden sea quests.',
+    entries: [
+      { id: 'draken-encounter', name: 'Draken Encounter', categories: ['Encounter', 'Quest'], url: '#' },
+      { id: 'deep-sea-bounty', name: 'Deep Sea Bounty', categories: ['Treasure', 'Exploration'], url: '#' },
+    ],
+  },
+  {
+    id: 'sea-lantern',
+    label: 'Lanternfish Beacon',
+    color: '#fbbf24',
+    scale: 2.1,
+    collisionRadius: 10,
+    interactionRadius: 30,
+    minSpacing: 80,
+    description: 'Illuminates oceanic routes and reveals time-limited lanternfish rewards.',
+    entries: [
+      { id: 'lanternfish-scout', name: 'Lanternfish Scout', categories: ['Creature'], url: '#' },
+      { id: 'glow-crates', name: 'Glow Crates', categories: ['Loot'], url: '#' },
+    ],
+  },
+  {
+    id: 'sea-treasure',
+    label: 'Treasure Outcrop',
+    color: '#34d399',
+    scale: 2.6,
+    collisionRadius: 14,
+    interactionRadius: 36,
+    minSpacing: 90,
+    description: 'A floating outpost marking secret treasure dives and expedition hubs.',
+    entries: [
+      { id: 'vault-cache', name: 'Vault Cache', categories: ['Treasure'], url: '#' },
+      { id: 'expedition-brief', name: 'Expedition Brief', categories: ['Mission'], url: '#' },
+    ],
+  },
+]
+
+function generateSeaMarkers(oceanSize, islands) {
+  const markers = []
+  const spawnRadius = oceanSize * 0.45
+
+  SEA_MARKER_PRESETS.forEach((preset, presetIndex) => {
+    let attempts = 0
+    const maxAttempts = 250
+    const spacing = preset.minSpacing ?? 80
+    const collisionRadius = preset.collisionRadius ?? 10
+    const interactionRadius = preset.interactionRadius ?? 32
+    const scale = preset.scale ?? 2.2
+
+    while (attempts < maxAttempts) {
+      attempts += 1
+      const x = (Math.random() * 2 - 1) * spawnRadius
+      const z = (Math.random() * 2 - 1) * spawnRadius
+      const position = [x, 0.85, z]
+
+      let valid = true
+
+      for (let i = 0; i < islands.length; i += 1) {
+        const island = islands[i]
+        const dx = x - island.position[0]
+        const dz = z - island.position[2]
+        const distance = Math.sqrt(dx * dx + dz * dz)
+        if (distance < (island.radius || 30) + spacing) {
+          valid = false
+          break
+        }
+      }
+      if (!valid) continue
+
+      for (let i = 0; i < markers.length; i += 1) {
+        const existing = markers[i]
+        const dx = x - existing.position[0]
+        const dz = z - existing.position[2]
+        const distance = Math.sqrt(dx * dx + dz * dz)
+        if (distance < (spacing + (existing.collisionRadius || 10))) {
+          valid = false
+          break
+        }
+      }
+      if (!valid) continue
+
+      markers.push({
+        ...preset,
+        id: `${preset.id}-${presetIndex}`,
+        position,
+        scale,
+        collisionRadius,
+        interactionRadius,
+      })
+      break
+    }
+  })
+
+  return markers
+}
+
 function BoatCameraRig({ boatRef, cameraDragRef }) {
   const smoothedPosition = useRef(new THREE.Vector3())
   const smoothedLookAt = useRef(new THREE.Vector3())
@@ -362,7 +467,7 @@ function SeaScenery({ size, islands }) {
   )
 }
 
-function BoatTracker({ boatRef, islands, onUpdate, onNearIsland }) {
+function BoatTracker({ boatRef, islands, markers, onUpdate, onNearIsland, onNearMarker }) {
   const lastUpdate = useRef(0)
 
   useFrame(({ clock }) => {
@@ -395,6 +500,27 @@ function BoatTracker({ boatRef, islands, onUpdate, onNearIsland }) {
         distance: closestDist,
         boat: updatePayload,
       })
+    }
+
+    if (Array.isArray(markers) && onNearMarker) {
+      let closestMarker = null
+      let closestMarkerDist = Infinity
+      markers.forEach((marker) => {
+        const dx = boat.position.x - marker.position[0]
+        const dz = boat.position.z - marker.position[2]
+        const dist = Math.sqrt(dx * dx + dz * dz)
+        if (dist < closestMarkerDist) {
+          closestMarker = marker
+          closestMarkerDist = dist
+        }
+      })
+      if (closestMarker) {
+        onNearMarker({
+          marker: closestMarker,
+          distance: closestMarkerDist,
+          boat: updatePayload,
+        })
+      }
     }
     lastUpdate.current = clock.elapsedTime
   })
@@ -524,7 +650,7 @@ function IslandWalkRig({ island, onRequestExit }) {
   )
 }
 
-function MiniMapOverlay({ boat, islands, walletConnected, walletAddress, onConnect, onDisconnect }) {
+function MiniMapOverlay({ boat, islands, markers, activeMarkerId, walletConnected, walletAddress, onConnect, onDisconnect }) {
   const size = 150
   const radius = size / 2 - 8
   const worldRadius = 360
@@ -576,6 +702,16 @@ function MiniMapOverlay({ boat, islands, walletConnected, walletAddress, onConne
             )
           })}
 
+          {markers.map((marker) => {
+            const projected = project(marker.position[0], marker.position[2])
+            return (
+              <g key={`sea-marker-${marker.id}`} transform={`translate(${size / 2 + projected.x} ${size / 2 + projected.y})`}>
+                <circle cx={0} cy={0} r={4.5} fill="rgba(255,255,255,0.75)" />
+                <circle cx={0} cy={0} r={3} fill={marker.color} />
+              </g>
+            )
+          })}
+
           <g transform={`translate(${size / 2 + pos.x} ${size / 2 + pos.y})`}>
             <circle cx={0} cy={0} r={6} fill="#38bdf8" stroke="#fff" strokeWidth={2} />
             <g transform={`rotate(${headingDeg})`}>
@@ -599,6 +735,78 @@ function LandingPrompt({ candidate }) {
           <span className={`${HUB_TITLE_CLASS} text-xl`}>{island.label || `Island ${island.id}`}</span>
         </div>
         <span className={HUB_SUBTEXT_INLINE_CLASS}>Press E to dock</span>
+      </div>
+    </div>
+  )
+}
+
+function SeaInteractionPrompt({ candidate, disabled }) {
+  if (!candidate?.marker || disabled) return null
+  const { marker } = candidate
+
+  return (
+    <div className="pointer-events-none absolute bottom-28 left-1/2 -translate-x-1/2">
+      <div className={`${HUB_PANEL_CLASS} flex items-center justify-between gap-5 px-7 py-4 text-white`}>
+        <div className="flex flex-col gap-1.5">
+          <span className={HUB_HEADING_CLASS}>Ocean Encounter</span>
+          <span className={`${HUB_TITLE_CLASS} text-xl`}>{marker.label}</span>
+        </div>
+        <span className={HUB_SUBTEXT_INLINE_CLASS}>Press E to interact</span>
+      </div>
+    </div>
+  )
+}
+
+function SeaMarkerOverlay({ marker, onClose }) {
+  if (!marker) return null
+
+  return (
+    <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+      <div className="pointer-events-auto w-[min(900px,66vw)] max-w-[90vw] rounded-[34px] border border-emerald-200/60 bg-emerald-950/92 px-10 py-8 text-emerald-50 shadow-[0_0_80px_rgba(14,116,144,0.65)] backdrop-blur-xl">
+        <div className="flex flex-col gap-6">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className={HUB_HEADING_CLASS}>Ocean Encounter</p>
+              <h3 className="mt-1 text-2xl font-semibold text-white drop-shadow-[0_0_18px_rgba(56,189,248,0.8)]">
+                {marker.label}
+              </h3>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-full border border-emerald-100/50 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.28em] text-emerald-100 hover:bg-emerald-100/20"
+            >
+              Close
+            </button>
+          </div>
+
+          <p className="text-sm leading-relaxed text-emerald-100/90">{marker.description}</p>
+
+          {Array.isArray(marker.entries) && marker.entries.length > 0 && (
+            <div className="grid grid-cols-1 gap-4">
+              {marker.entries.map((entry) => (
+                <a
+                  key={entry.id}
+                  href={entry.url || '#'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-4 rounded-[20px] border border-emerald-100/35 bg-emerald-900/40 px-6 py-4 text-left text-sm text-white transition hover:bg-emerald-800/50"
+                >
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/15 bg-white/10 text-xs font-semibold uppercase tracking-[0.2em] text-white/80">
+                    {entry.name?.slice(0, 2) ?? 'EX'}
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-white drop-shadow-[0_0_12px_rgba(56,189,248,0.6)]">{entry.name}</p>
+                    <p className="text-[11px] uppercase tracking-[0.24em] text-emerald-100">
+                      {(entry.categories || []).slice(0, 2).join(' • ') || 'Monad Quest'}
+                    </p>
+                  </div>
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-100">↗</span>
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -668,14 +876,17 @@ export default function SailingScene({ walletConnected, walletAddress, onConnect
   })
   const [boatState, setBoatState] = useState({ x: 0, z: 0, heading: 0 })
   const oceanSize = 520
+  const [seaMarkers] = useState(() => generateSeaMarkers(oceanSize, DISTANT_ISLANDS))
   const [showControls, setShowControls] = useState(false)
   const [mode, setMode] = useState('sailing')
   const [landingCandidate, setLandingCandidate] = useState(null)
+  const [seaCandidate, setSeaCandidate] = useState(null)
   const [activeIslandId, setActiveIslandId] = useState(null)
   const [boatEnabled, setBoatEnabled] = useState(true)
   const [boostActive, setBoostActive] = useState(false)
   const [isCameraDragging, setIsCameraDragging] = useState(false)
   const [selectedEntity, setSelectedEntity] = useState(null)
+  const [activeSeaMarker, setActiveSeaMarker] = useState(null)
   const boatSavedStateRef = useRef({
     position: new THREE.Vector3(),
     rotationY: 0,
@@ -723,6 +934,21 @@ export default function SailingScene({ walletConnected, walletAddress, onConnect
     []
   )
 
+  const seaColliders = useMemo(
+    () =>
+      seaMarkers.map((marker) => ({
+        id: marker.id,
+        position: marker.position,
+        radius: (marker.collisionRadius || 10) + 2,
+      })),
+    [seaMarkers]
+  )
+
+  const navigationColliders = useMemo(
+    () => [...islandColliders, ...seaColliders],
+    [islandColliders, seaColliders]
+  )
+
   const canvasCursorClass =
     mode === 'sailing' ? (isCameraDragging ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-auto'
 
@@ -739,6 +965,14 @@ export default function SailingScene({ walletConnected, walletAddress, onConnect
   useEffect(() => {
     if (mode !== 'island') {
       setSelectedEntity(null)
+    }
+  }, [mode])
+
+  useEffect(() => {
+    if (mode !== 'sailing') {
+      setSeaCandidate(null)
+      setActiveSeaMarker(null)
+      setBoatEnabled(true)
     }
   }, [mode])
 
@@ -783,6 +1017,31 @@ export default function SailingScene({ walletConnected, walletAddress, onConnect
     },
     [mode]
   )
+
+  const handleNearSeaMarker = useCallback(
+    ({ marker, distance }) => {
+      if (mode !== 'sailing') return
+      if (activeSeaMarker?.id && marker?.id !== activeSeaMarker.id) return
+      if (marker && distance < (marker.interactionRadius || 32)) {
+        setSeaCandidate({ marker, distance })
+      } else if (!activeSeaMarker) {
+        setSeaCandidate(null)
+      }
+    },
+    [mode, activeSeaMarker]
+  )
+
+  const handleOpenSeaMarker = useCallback(() => {
+    if (!seaCandidate?.marker) return
+    setActiveSeaMarker(seaCandidate.marker)
+    setBoatEnabled(false)
+  }, [seaCandidate])
+
+  const handleCloseSeaMarker = useCallback(() => {
+    setActiveSeaMarker(null)
+    setSeaCandidate(null)
+    setBoatEnabled(true)
+  }, [])
 
   const handleSelectEntity = useCallback(
     (entity, zoneEntries = []) => {
@@ -898,24 +1157,37 @@ export default function SailingScene({ walletConnected, walletAddress, onConnect
   useEffect(() => {
     const handleKeyDown = (event) => {
       if (event.repeat) return
-      if (mode === 'sailing' && landingCandidate?.island && event.code === 'KeyE') {
-        if (boatRef.current) {
-          boatSavedStateRef.current.position = boatRef.current.position.clone()
-          boatSavedStateRef.current.rotationY = boatRef.current.rotation.y
-          boatRef.current.visible = false
+
+      if (mode === 'sailing') {
+        if (activeSeaMarker && (event.code === 'Escape' || event.code === 'KeyE')) {
+          handleCloseSeaMarker()
+          return
         }
-        setBoatEnabled(false)
-        setActiveIslandId(landingCandidate.island.id)
-        setMode('island')
-        setLandingCandidate(null)
+        if (!activeSeaMarker && seaCandidate?.marker && event.code === 'KeyE') {
+          handleOpenSeaMarker()
+          return
+        }
+        if (landingCandidate?.island && event.code === 'KeyE') {
+          if (boatRef.current) {
+            boatSavedStateRef.current.position = boatRef.current.position.clone()
+            boatSavedStateRef.current.rotationY = boatRef.current.rotation.y
+            boatRef.current.visible = false
+          }
+          setBoatEnabled(false)
+          setActiveIslandId(landingCandidate.island.id)
+          setMode('island')
+          setLandingCandidate(null)
+          return
+        }
       }
+
       if (mode === 'island' && event.code === 'KeyB') {
         handleExitIsland()
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [mode, landingCandidate, handleExitIsland])
+  }, [mode, landingCandidate, seaCandidate, activeSeaMarker, handleOpenSeaMarker, handleCloseSeaMarker, handleExitIsland])
 
   return (
     <div className="relative h-screen w-screen overflow-hidden">
@@ -935,7 +1207,9 @@ export default function SailingScene({ walletConnected, walletAddress, onConnect
             onPointerLeave={handlePointerLeave}
             onPointerCancel={handlePointerCancel}
             onPointerMissed={() => {
-              if (mode === 'island') {
+              if (activeSeaMarker) {
+                handleCloseSeaMarker()
+              } else if (mode === 'island') {
                 handleClearEntitySelection()
               }
             }}
@@ -971,6 +1245,11 @@ export default function SailingScene({ walletConnected, walletAddress, onConnect
 
                 <Suspense fallback={null}>
               <SeaScenery size={oceanSize} islands={DISTANT_ISLANDS} />
+              <SeaMarkers
+                markers={seaMarkers}
+                candidateId={!activeSeaMarker ? seaCandidate?.marker?.id : null}
+                activeMarker={activeSeaMarker}
+              />
               <ChogsBoat
                 ref={boatRef}
                 position={[0, 0.9, 0]}
@@ -980,7 +1259,7 @@ export default function SailingScene({ walletConnected, walletAddress, onConnect
                 acceleration={boostActive ? 8 : 5.2}
                 braking={boostActive ? 8 : 6.5}
                 driftDamping={boostActive ? 0.987 : 0.982}
-                colliders={islandColliders}
+                colliders={navigationColliders}
                 collisionRadius={3.2}
                 collisionSlideFactor={1.9}
                 slideDamping={0.78}
@@ -1005,8 +1284,10 @@ export default function SailingScene({ walletConnected, walletAddress, onConnect
                 <BoatTracker
                   boatRef={boatRef}
                   islands={DISTANT_ISLANDS}
+                  markers={seaMarkers}
                   onUpdate={setBoatState}
                   onNearIsland={handleNearIsland}
+                  onNearMarker={handleNearSeaMarker}
                 />
               </>
             ) : (
@@ -1036,12 +1317,15 @@ export default function SailingScene({ walletConnected, walletAddress, onConnect
           <MiniMapOverlay
             boat={boatState}
             islands={DISTANT_ISLANDS}
+            markers={seaMarkers}
+            activeMarkerId={activeSeaMarker?.id || seaCandidate?.marker?.id}
             walletConnected={walletConnected}
             walletAddress={walletAddress}
             onConnect={onConnect}
             onDisconnect={onDisconnect}
           />
           <LandingPrompt candidate={landingCandidate} />
+          <SeaInteractionPrompt candidate={seaCandidate} disabled={Boolean(activeSeaMarker)} />
           <div className="pointer-events-none absolute bottom-16 left-8">
             <div className={`${HUB_PANEL_CLASS} flex items-center gap-3 px-5 py-3 text-white`}>
               <button
@@ -1078,6 +1362,9 @@ export default function SailingScene({ walletConnected, walletAddress, onConnect
           levelInfo={levelInfo}
         />
       )}
+
+      {activeSeaMarker && <SeaMarkerOverlay marker={activeSeaMarker} onClose={handleCloseSeaMarker} />}
+
     </div>
   )
 }
