@@ -6,13 +6,13 @@ import { shaderMaterial } from '@react-three/drei'
 const WaterMaterial = shaderMaterial(
   {
     uTime: 0,
-    uWaveHeight: 0.76,
-    uWaveScale: 0.19,
-    uWaveSpeed: 0.5,
+    uWaveHeight: 0.52,
+    uWaveScale: 0.24,
+    uWaveSpeed: 0.65,
     uColorDeep: new THREE.Color('#2a9fd4'),
     uColorShallow: new THREE.Color('#87ceeb'),
     uSunDirection: new THREE.Vector3(0.45, 1.3, 0.18).normalize(),
-    uFoamThreshold: 0.34,
+    uFoamThreshold: 0.42,
   },
   /* glsl */ `
     precision highp float;
@@ -27,19 +27,28 @@ const WaterMaterial = shaderMaterial(
     varying float vElevation;
 
     vec3 computeNormal(vec2 position, float time) {
-      float waveA = sin((position.x + time * uWaveSpeed) * uWaveScale);
-      float waveB = cos((position.y - time * uWaveSpeed * 1.3) * uWaveScale * 0.8);
-      float waveC = sin((position.x * 0.6 - time * uWaveSpeed * 0.7) * uWaveScale * 1.7);
-
+      vec2 pos = position * uWaveScale;
+      
+      float waveA = sin(pos.x * 1.0 + time * uWaveSpeed * 1.0);
+      float waveB = cos(pos.y * 1.0 - time * uWaveSpeed * 1.3);
+      float waveC = sin((pos.x + pos.y) * 0.7 - time * uWaveSpeed * 0.8);
+      float waveD = cos((pos.x - pos.y) * 0.8 + time * uWaveSpeed * 0.9);
+      float waveE = sin(pos.x * 1.5 + pos.y * 0.5 - time * uWaveSpeed * 1.1);
+      float waveF = cos(pos.y * 1.3 + pos.x * 0.6 + time * uWaveSpeed * 0.7);
+      
       float dHdX = uWaveHeight * (
-        cos((position.x + time * uWaveSpeed) * uWaveScale) * uWaveScale +
-        cos((position.x * 0.6 - time * uWaveSpeed * 0.7) * uWaveScale * 1.7) * uWaveScale * 1.7 * 0.6
-      );
+        cos(pos.x * 1.0 + time * uWaveSpeed * 1.0) * uWaveScale * 1.0 +
+        cos((pos.x + pos.y) * 0.7 - time * uWaveSpeed * 0.8) * uWaveScale * 0.7 +
+        cos((pos.x - pos.y) * 0.8 + time * uWaveSpeed * 0.9) * uWaveScale * 0.8 +
+        cos(pos.x * 1.5 + pos.y * 0.5 - time * uWaveSpeed * 1.1) * uWaveScale * 1.5
+      ) / 4.0;
 
       float dHdY = uWaveHeight * (
-        -sin((position.y - time * uWaveSpeed * 1.3) * uWaveScale * 0.8) * uWaveScale * 0.8 +
-        cos((position.y * 0.75 + time * uWaveSpeed * 0.5) * uWaveScale * 1.2) * uWaveScale * 1.2 * 0.75
-      );
+        -sin(pos.y * 1.0 - time * uWaveSpeed * 1.3) * uWaveScale * 1.0 +
+        cos((pos.x + pos.y) * 0.7 - time * uWaveSpeed * 0.8) * uWaveScale * 0.7 +
+        -sin((pos.x - pos.y) * 0.8 + time * uWaveSpeed * 0.9) * uWaveScale * 0.8 +
+        -sin(pos.y * 1.3 + pos.x * 0.6 + time * uWaveSpeed * 0.7) * uWaveScale * 1.3
+      ) / 4.0;
 
       vec3 tangentX = normalize(vec3(1.0, 0.0, dHdX));
       vec3 tangentY = normalize(vec3(0.0, 1.0, dHdY));
@@ -48,12 +57,16 @@ const WaterMaterial = shaderMaterial(
 
     void main() {
       vec3 pos = position;
+      vec2 pos2D = position.xy * uWaveScale;
 
-      float waveA = sin((position.x + uTime * uWaveSpeed) * uWaveScale);
-      float waveB = cos((position.y - uTime * uWaveSpeed * 1.3) * uWaveScale * 0.8);
-      float waveC = sin((position.x * 0.6 - uTime * uWaveSpeed * 0.7) * uWaveScale * 1.7);
-      float waveD = cos((position.y * 0.75 + uTime * uWaveSpeed * 0.5) * uWaveScale * 1.2);
-      float elevation = (waveA + waveB + waveC + waveD) * 0.25 * uWaveHeight;
+      float waveA = sin(pos2D.x * 1.0 + uTime * uWaveSpeed * 1.0);
+      float waveB = cos(pos2D.y * 1.0 - uTime * uWaveSpeed * 1.3);
+      float waveC = sin((pos2D.x + pos2D.y) * 0.7 - uTime * uWaveSpeed * 0.8);
+      float waveD = cos((pos2D.x - pos2D.y) * 0.8 + uTime * uWaveSpeed * 0.9);
+      float waveE = sin(pos2D.x * 1.5 + pos2D.y * 0.5 - uTime * uWaveSpeed * 1.1);
+      float waveF = cos(pos2D.y * 1.3 + pos2D.x * 0.6 + uTime * uWaveSpeed * 0.7);
+      
+      float elevation = (waveA + waveB + waveC + waveD + waveE * 0.7 + waveF * 0.7) / 5.4 * uWaveHeight;
 
       pos.z += elevation;
 
@@ -86,7 +99,7 @@ const WaterMaterial = shaderMaterial(
 
       float diffuse = max(dot(normal, sunDir), 0.0);
       vec3 halfway = normalize(sunDir + viewDir);
-      float specular = pow(max(dot(normal, halfway), 0.0), 32.0);
+      float specular = pow(max(dot(normal, halfway), 0.0), 48.0);
 
       float fresnel = pow(1.0 - max(dot(viewDir, normal), 0.0), 3.0);
       float foam = smoothstep(uFoamThreshold - 0.05, uFoamThreshold + 0.05, abs(vElevation));
@@ -94,13 +107,13 @@ const WaterMaterial = shaderMaterial(
       float colorMix = clamp((vElevation * 1.8) + 0.45, 0.0, 1.0);
       vec3 baseColor = mix(uColorDeep, uColorShallow, colorMix);
 
-      float smoothDiffuse = mix(0.95, 1.12, smoothstep(-0.3, 0.3, diffuse * 0.4));
-      vec3 lighting = baseColor * smoothDiffuse * 1.15 + vec3(0.95, 0.99, 1.0) * specular * 0.3;
-      vec3 foamColor = mix(vec3(0.98, 1.0, 1.0), vec3(0.85, 0.95, 1.0), 0.3);
+      float smoothDiffuse = mix(0.98, 1.08, smoothstep(-0.3, 0.3, diffuse * 0.4));
+      vec3 lighting = baseColor * smoothDiffuse * 1.08 + vec3(0.92, 0.95, 0.98) * specular * 0.12;
+      vec3 foamColor = mix(vec3(0.92, 0.96, 1.0), baseColor * 1.05, 0.7);
 
-      vec3 finalColor = mix(lighting, foamColor, foam * 0.4 + fresnel * 0.12);
-      finalColor += fresnel * 0.25;
-      finalColor = max(finalColor, baseColor * 0.85);
+      vec3 finalColor = mix(lighting, foamColor, foam * 0.15 + fresnel * 0.04);
+      finalColor += fresnel * 0.08;
+      finalColor = max(finalColor, baseColor * 0.92);
 
       gl_FragColor = vec4(finalColor, 0.92);
     }
