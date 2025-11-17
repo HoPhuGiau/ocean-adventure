@@ -1,8 +1,8 @@
 export const questDefinitions = [
   {
     id: 'first-steps',
-    title: 'First Footsteps',
-    description: 'Visit 3 unique dApps inside the museum.',
+    title: 'First Landing',
+    description: 'Visit 3 unique dApps on the islands during your voyage.',
     type: 'uniqueVisits',
     target: 3,
     xpReward: 80,
@@ -10,8 +10,8 @@ export const questDefinitions = [
   },
   {
     id: 'curator-tour',
-    title: 'Curator Tour',
-    description: 'Explore 8 unique dApps to map the main gallery.',
+    title: 'Island Explorer',
+    description: 'Explore 8 unique dApps across the islands to chart your journey.',
     type: 'uniqueVisits',
     target: 8,
     xpReward: 120,
@@ -20,7 +20,7 @@ export const questDefinitions = [
   {
     id: 'defi-discovery',
     title: 'DeFi Discovery',
-    description: 'Visit 4 DeFi dApps.',
+    description: 'Visit 4 DeFi dApps on your ocean adventure.',
     type: 'category',
     category: 'DeFi',
     target: 4,
@@ -30,7 +30,7 @@ export const questDefinitions = [
   {
     id: 'monad-ambassador',
     title: 'Monad Ambassador',
-    description: 'Find 5 projects that are only on Monad.',
+    description: 'Discover 5 projects that are only on Monad during your voyage.',
     type: 'onlyOnMonad',
     target: 5,
     xpReward: 180,

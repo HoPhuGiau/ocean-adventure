@@ -1,14 +1,17 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
-import { Environment, Sky, KeyboardControls, useKeyboardControls } from '@react-three/drei'
+import { Environment, Sky, KeyboardControls, useKeyboardControls, Stars } from '@react-three/drei'
 import * as THREE from 'three'
 import ChogsBoat from '../components/ChogsBoat'
 import Water from '../components/Water'
 import WalletConnect from '../components/WalletConnect'
 import IslandEntities from '../components/IslandEntities'
 import SeaMarkers from '../components/SeaMarkers'
+import Leaderboard from '../components/Leaderboard'
+import QuestTracker from '../components/QuestTracker'
 import { useQuestStore } from '../store/questStore'
 import { dAppsData } from '../utils/dappsData'
+import { syncPlayerScore } from '../utils/scoreService'
 
 const followOffset = new THREE.Vector3(0, 5.2, 11.5)
 const lookAtOffset = new THREE.Vector3(0, 1.6, 0)
@@ -692,8 +695,8 @@ function MiniMapOverlay({ boat, islands, markers, activeMarkerId, walletConnecte
   const headingDeg = ((boat.heading ?? 0) * 180) / Math.PI * -1
 
   return (
-    <div className="pointer-events-none absolute top-8 right-8 flex flex-col items-end gap-3">
-      <div className="pointer-events-auto rounded-full border border-white/20 bg-black/35 px-4 py-2 text-white/80 backdrop-blur">
+    <div className="pointer-events-none absolute top-8 right-8 flex flex-col items-end gap-3 z-10">
+      <div className="pointer-events-auto relative z-[100] rounded-full border border-white/20 bg-black/35 px-4 py-2 text-white/80 backdrop-blur">
         <WalletConnect
           walletConnected={walletConnected}
           walletAddress={walletAddress}
@@ -703,7 +706,7 @@ function MiniMapOverlay({ boat, islands, markers, activeMarkerId, walletConnecte
         />
       </div>
 
-      <div className="relative flex h-[150px] w-[150px] items-center justify-center rounded-full border border-white/25 bg-white/10 shadow-[0_25px_60px_rgba(15,40,80,0.55)] backdrop-blur-xl">
+      <div className="pointer-events-none relative flex h-[150px] w-[150px] items-center justify-center rounded-full border border-white/25 bg-white/10 shadow-[0_25px_60px_rgba(15,40,80,0.55)] backdrop-blur-xl z-0">
         <svg width={size} height={size}>
           <defs>
             <radialGradient id="oceanGlow" cx="50%" cy="50%" r="70%">
@@ -1006,10 +1009,13 @@ export default function SailingScene({ walletConnected, walletAddress, onConnect
   const [selectedEntity, setSelectedEntity] = useState(null)
   const [islandLabelResetKey, setIslandLabelResetKey] = useState(0)
   const [activeSeaMarker, setActiveSeaMarker] = useState(null)
+  const [showLeaderboard, setShowLeaderboard] = useState(false)
   const boatSavedStateRef = useRef({
     position: new THREE.Vector3(),
     rotationY: 0,
   })
+
+  const questState = useQuestStore()
 
   const activeIsland = useMemo(
     () => DISTANT_ISLANDS.find((island) => island.id === activeIslandId) || null,
@@ -1023,6 +1029,20 @@ export default function SailingScene({ walletConnected, walletAddress, onConnect
   )
   const levelInfo = useQuestStore((state) => state.getLevelInfo())
   const questList = useQuestStore((state) => state.getQuestList())
+
+  // Sync player score to Supabase when questState or walletAddress changes
+  useEffect(() => {
+    if (!walletAddress || !questState) return
+
+    // Debounce sync to avoid too many requests
+    const timeoutId = setTimeout(() => {
+      syncPlayerScore(walletAddress, questState).catch((error) => {
+        console.error('Failed to sync player score:', error)
+      })
+    }, 2000) // Wait 2 seconds after last change
+
+    return () => clearTimeout(timeoutId)
+  }, [walletAddress, questState.xp, questState.level, questState.visitedDapps, questState.completedQuests])
 
   const islandZones = useMemo(
     () => (activeIsland ? computeIslandZones(activeIsland.id, baseDapps, questList) : null),
@@ -1439,7 +1459,7 @@ export default function SailingScene({ walletConnected, walletAddress, onConnect
                   lightIntensity = Math.max(0.5, Math.min(0.75, (moonHeight + 50) / 150))
                   ambientIntensity = Math.max(0.32, 0.40)
                   ambientColor = '#5a5a8e'
-                  backgroundColor = '#2a2a5a'
+                  backgroundColor = '#1a1a2e'
                   skyInclination = 0.85
                   skyTurbidity = 25
                   skyRayleigh = 0.1
@@ -1447,8 +1467,8 @@ export default function SailingScene({ walletConnected, walletAddress, onConnect
                   lightColor = '#e4e4ff'
                   lightIntensity = Math.max(0.55, Math.min(0.8, (moonHeight + 50) / 150))
                   ambientIntensity = Math.max(0.38, 0.45)
-                  ambientColor = '#2a2a5e'
-                  backgroundColor = '#000020'
+                  ambientColor = '#1a1a2e'
+                  backgroundColor = '#000000'
                   skyInclination = 0.9
                   skyTurbidity = 30
                   skyRayleigh = 0.02
@@ -1457,7 +1477,7 @@ export default function SailingScene({ walletConnected, walletAddress, onConnect
                   lightIntensity = Math.max(0.5, Math.min(0.75, (moonHeight + 50) / 150))
                   ambientIntensity = Math.max(0.32, 0.40)
                   ambientColor = '#5a5a8e'
-                  backgroundColor = '#2a2a5a'
+                  backgroundColor = '#1a1a2e'
                   skyInclination = 0.85
                   skyTurbidity = 25
                   skyRayleigh = 0.1
@@ -1466,7 +1486,7 @@ export default function SailingScene({ walletConnected, walletAddress, onConnect
                   skyTurbidity = 10
                   skyRayleigh = 0.5
                 }
-                if (hours >= 22 || hours < 4) backgroundColor = '#0a0a1f'
+                if (hours >= 22 || hours < 4) backgroundColor = '#000000'
               }
 
               const sunPosition = [sunX * 0.001, sunHeight * 0.001 + 1, sunZ * 0.001]
@@ -1495,6 +1515,17 @@ export default function SailingScene({ walletConnected, walletAddress, onConnect
 
                   {isDay && <DynamicSun dayProgress={dayProgress} />}
                   {isNight && <DynamicMoon dayProgress={dayProgress} />}
+
+                  {isNight && (
+                    <Stars
+                      radius={500}
+                      depth={200}
+                      count={2500}
+                      factor={6}
+                      fade
+                      speed={0.3}
+                    />
+                  )}
 
                   <Sky
                     distance={450000}
@@ -1599,7 +1630,7 @@ export default function SailingScene({ walletConnected, walletAddress, onConnect
           />
           <LandingPrompt candidate={landingCandidate} />
           <SeaInteractionPrompt candidate={seaCandidate} disabled={Boolean(activeSeaMarker)} />
-          <div className="pointer-events-none absolute bottom-16 left-8">
+          <div className="pointer-events-none absolute bottom-16 left-8 flex gap-3">
             <div className={`${HUB_PANEL_CLASS} flex items-center gap-3 px-5 py-3 text-white`}>
               <button
                 type="button"
@@ -1607,6 +1638,15 @@ export default function SailingScene({ walletConnected, walletAddress, onConnect
                 className={boostActive ? HUB_BUTTON_ACTIVE : HUB_BUTTON_INACTIVE}
               >
                 {boostActive ? 'Boost x2' : 'Boost x1'}
+              </button>
+            </div>
+            <div className={`${HUB_PANEL_CLASS} flex items-center gap-3 px-5 py-3 text-white`}>
+              <button
+                type="button"
+                onClick={() => setShowLeaderboard(true)}
+                className={HUB_BUTTON_INACTIVE}
+              >
+                🏆 Leaderboard
               </button>
             </div>
           </div>
@@ -1625,6 +1665,9 @@ export default function SailingScene({ walletConnected, walletAddress, onConnect
               </p>
             </div>
           </div>
+          <div className="absolute bottom-6 left-6 text-white">
+            <QuestTracker variant="default" maxItems={3} />
+          </div>
         </>
       )}
 
@@ -1637,6 +1680,10 @@ export default function SailingScene({ walletConnected, walletAddress, onConnect
       )}
 
       {activeSeaMarker && <SeaMarkerOverlay marker={activeSeaMarker} onClose={handleCloseSeaMarker} />}
+
+      {showLeaderboard && (
+        <Leaderboard walletAddress={walletAddress} onClose={() => setShowLeaderboard(false)} />
+      )}
 
     </div>
   )

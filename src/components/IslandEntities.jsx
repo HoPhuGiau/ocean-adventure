@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber'
 import { Html, useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
 import { islandEntitiesConfig } from '../utils/islandEntities'
+import { useQuestStore } from '../store/questStore'
 
 const tempVec3 = new THREE.Vector3()
 
@@ -75,6 +76,7 @@ export default function IslandEntities({
   const [labelledIds, setLabelledIds] = useState([])
   const entityRefs = useRef([])
   const angleRefs = useRef([])
+  const registerVisit = useQuestStore((state) => state.registerVisit)
 
   const entities = useMemo(() => deriveEntities(island), [island])
 
@@ -231,6 +233,12 @@ export default function IslandEntities({
                             href={entry.url || '#'}
                             target="_blank"
                             rel="noopener noreferrer"
+                            onClick={() => {
+                              // Register visit when clicking on dApp entry
+                              if (entry?.id) {
+                                registerVisit(entry)
+                              }
+                            }}
                             className="flex items-center gap-3 rounded-[18px] border border-emerald-100/30 bg-emerald-900/40 px-4 py-3 text-sm text-white transition hover:bg-emerald-800/50"
                           >
                             <div className="h-10 w-10 overflow-hidden rounded-xl border border-white/15 bg-white/10">
