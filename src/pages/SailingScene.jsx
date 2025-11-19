@@ -1578,6 +1578,8 @@ export default function SailingScene({ walletConnected, walletAddress, onConnect
                   zoneData={islandZones}
                   selectedEntity={selectedEntity}
                   labelResetKey={islandLabelResetKey}
+                  walletAddress={walletAddress}
+                  walletConnected={walletConnected}
                 />
               )}
             </Suspense>

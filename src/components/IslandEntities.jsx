@@ -70,6 +70,8 @@ export default function IslandEntities({
   onSelectEntity,
   onClearSelection,
   labelResetKey,
+  walletAddress,
+  walletConnected,
 }) {
   const [hoveredId, setHoveredId] = useState(null)
   const [pressedId, setPressedId] = useState(null)

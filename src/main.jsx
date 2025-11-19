@@ -1,5 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
+// Suppress console errors from wallet extensions
+import './utils/consoleSuppress'
 import App from './App.jsx'
 import './index.css'
 

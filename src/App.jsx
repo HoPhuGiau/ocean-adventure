@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import SailingScene from './pages/SailingScene'
+import { ToastContainer } from './utils/toast'
+// Suppress console errors from wallet extensions (optional - uncomment if needed)
+// import './utils/consoleSuppress'
 import './App.css'
 
 function AppShell({ children, walletConnected, walletAddress, onConnect, onDisconnect }) {
@@ -41,6 +44,7 @@ function App() {
 
   return (
     <Router>
+      <ToastContainer />
       <Routes>
         <Route
           path="/"

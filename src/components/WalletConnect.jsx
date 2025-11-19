@@ -2,35 +2,72 @@ import { useState } from 'react'
 import { ethers } from 'ethers'
 import { getProvider } from '../utils/monadRPC'
 
+// Safely get ethereum provider (handle multiple wallet conflicts)
+const getEthereumProvider = () => {
+  if (typeof window === 'undefined') return null
+
+  try {
+    // MetaMask v10+ uses providers array
+    if (window.ethereum?.providers && Array.isArray(window.ethereum.providers)) {
+      // Find MetaMask first, then fallback to first provider
+      const metamask = window.ethereum.providers.find((p) => p.isMetaMask)
+      return metamask || window.ethereum.providers[0] || window.ethereum
+    }
+
+    // Single provider
+    if (window.ethereum) {
+      return window.ethereum
+    }
+  } catch (error) {
+    // Suppress errors from wallet extension conflicts
+    console.warn('Wallet extension conflict detected, trying to use available provider:', error.message)
+  }
+
+  return null
+}
+
 // Detect available wallets
 const detectWallets = () => {
   const wallets = []
   
   if (typeof window === 'undefined') return wallets
 
-  // MetaMask
-  if (window.ethereum?.isMetaMask) {
-    wallets.push({ id: 'metamask', name: 'MetaMask', icon: '🦊' })
-  }
+  try {
+    const ethereum = getEthereumProvider()
 
-  // Rabby
-  if (window.ethereum?.isRabby) {
-    wallets.push({ id: 'rabby', name: 'Rabby', icon: '🐰' })
-  }
+    if (!ethereum) return wallets
 
-  // Coinbase Wallet
-  if (window.ethereum?.isCoinbaseWallet) {
-    wallets.push({ id: 'coinbase', name: 'Coinbase Wallet', icon: '🔷' })
-  }
+    // MetaMask
+    if (ethereum.isMetaMask) {
+      wallets.push({ id: 'metamask', name: 'MetaMask', icon: '🦊' })
+    }
 
-  // Trust Wallet
-  if (window.ethereum?.isTrust) {
-    wallets.push({ id: 'trust', name: 'Trust Wallet', icon: '🔒' })
-  }
+    // Rabby
+    if (ethereum.isRabby) {
+      wallets.push({ id: 'rabby', name: 'Rabby', icon: '🐰' })
+    }
 
-  // Generic EIP-1193 provider (fallback)
-  if (window.ethereum && wallets.length === 0) {
-    wallets.push({ id: 'generic', name: 'Wallet', icon: '👛' })
+    // Coinbase Wallet
+    if (ethereum.isCoinbaseWallet) {
+      wallets.push({ id: 'coinbase', name: 'Coinbase Wallet', icon: '🔷' })
+    }
+
+    // Trust Wallet
+    if (ethereum.isTrust) {
+      wallets.push({ id: 'trust', name: 'Trust Wallet', icon: '🔒' })
+    }
+
+    // Generic EIP-1193 provider (fallback)
+    if (wallets.length === 0) {
+      wallets.push({ id: 'generic', name: 'Wallet', icon: '👛' })
+    }
+  } catch (error) {
+    // Suppress detection errors (wallet extension conflicts)
+    console.warn('Error detecting wallets:', error.message)
+    // Still try to add generic wallet if ethereum exists
+    if (window.ethereum) {
+      wallets.push({ id: 'generic', name: 'Wallet', icon: '👛' })
+    }
   }
 
   return wallets
@@ -53,22 +90,25 @@ export default function WalletConnect({
   const pillSecondary = `${pillButtonBase} bg-white/10 hover:bg-white/20 text-white focus-visible:ring-white/40`
 
   const connectWallet = async (walletId = null) => {
-    if (typeof window === 'undefined' || !window.ethereum) {
-      alert('Please install MetaMask, Rabby, or another Web3 wallet!')
-      return
-    }
-
     setConnecting(true)
     setShowWalletList(false)
+    
     try {
+      const ethereum = getEthereumProvider()
+      
+      if (!ethereum) {
+        alert('Please install MetaMask, Rabby, or another Web3 wallet!')
+        return
+      }
+
       let provider
       
-      if (walletId === 'rabby' && window.rabby && window.rabby.ethereum) {
+      // Try Rabby first if specified
+      if (walletId === 'rabby' && window.rabby?.ethereum) {
         provider = new ethers.BrowserProvider(window.rabby.ethereum)
-      } else if (window.ethereum) {
-        provider = new ethers.BrowserProvider(window.ethereum)
       } else {
-        throw new Error('No wallet provider found')
+        // Use the detected ethereum provider
+        provider = new ethers.BrowserProvider(ethereum)
       }
 
       const accounts = await provider.send('eth_requestAccounts', [])
@@ -77,10 +117,16 @@ export default function WalletConnect({
       }
     } catch (error) {
       console.error('Error connecting wallet:', error)
+      
+      // User-friendly error messages
       if (error.code === 4001) {
-        alert('Please approve the connection request in your wallet')
+        alert('Connection request was rejected. Please try again and approve the request.')
+      } else if (error.message?.includes('ethereum') || error.message?.includes('provider')) {
+        // Wallet extension conflict - still try to connect
+        console.warn('Wallet extension conflict detected, but connection may still work')
+        alert('Multiple wallet extensions detected. Please ensure only one wallet extension is active, or try refreshing the page.')
       } else {
-        alert('Failed to connect wallet. Please try again.')
+        alert(`Failed to connect wallet: ${error.message || 'Unknown error'}. Please try again.`)
       }
     } finally {
       setConnecting(false)
